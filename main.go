@@ -8,6 +8,11 @@ import (
 const port = "6969"
 const StreamerMode = false
 
+type Client struct {
+	conn   net.Conn
+	output chan string
+}
+
 func SafeRemoteAddr(conn net.Conn) string {
 
 	if StreamerMode {
@@ -18,16 +23,17 @@ func SafeRemoteAddr(conn net.Conn) string {
 
 }
 
-func handleConnection(conn net.Conn) {
+func handleConnection(conn net.Conn, outgoing chan string) {
 	defer conn.Close()
-	message := []byte("Hello user\n")
-	n, err := conn.Write(message)
-	if err != nil {
-		log.Printf("Could not write message to %s : %s\n", SafeRemoteAddr(conn), err)
-		return
-	}
-	if n < len(message) {
-		log.Printf("The message was not fully written %d %d\n", n, len(message))
+
+	buffer := []byte{}
+	for {
+		n, err := conn.Read(buffer)
+		if err != nil {
+			conn.Close()
+			return
+		}
+		outgoing <- string(buffer[0:n])
 	}
 }
 func main() {
@@ -42,6 +48,7 @@ func main() {
 			log.Printf("Could not accept connection %s\n", err)
 		}
 		log.Printf("Accepting connection from %s", SafeRemoteAddr(conn))
-		go handleConnection(conn)
+		outgoing := make(chan string)
+		go handleConnection(conn, outgoing)
 	}
 }
